@@ -73,6 +73,9 @@ public class FactionPlugin extends JavaPlugin {
     private fr.faction.web.WebLinkManager webLinkManager;
     private fr.faction.web.WebMapSync webMapSync;
 
+    // v5.11 — sync faction/rang vers MySQL (tab-list réseau / HeroTab)
+    private fr.faction.web.FactionTabSync factionTabSync;
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -82,8 +85,12 @@ public class FactionPlugin extends JavaPlugin {
         sharedInventoryManager = new SharedInventoryManager(this, factionManager);
         teleportManager        = new FactionTeleportManager(this, factionManager);
         powerManager           = new FactionPowerManager(this, factionManager, statsManager);
+        // Sync MySQL faction/rang → table faction_tab_sync, lue par HeroTab (proxy Velocity)
+        // pour afficher la faction de chacun dans le tab-list réseau.
+
+        factionTabSync          = new fr.faction.web.FactionTabSync(this);
         // tabManager doit être créé avant powerManager.start() pour le rankUp
-        tabManager             = new fr.faction.power.FactionTabManager(this, factionManager, powerManager);
+        tabManager             = new fr.faction.power.FactionTabManager(this, factionManager, powerManager, factionTabSync);
         powerManager.setTabManager(tabManager);
         powerManager.start();
 
@@ -314,6 +321,7 @@ public class FactionPlugin extends JavaPlugin {
         if (privateChestManager != null)    privateChestManager.save();
         if (warManager != null)             { warManager.save(); warManager.stop(); }
         if (webLinkManager != null)         webLinkManager.close();
+        if (factionTabSync != null)          factionTabSync.close();
         getLogger().info("FactionPlugin désactivé. Données sauvegardées.");
     }
 

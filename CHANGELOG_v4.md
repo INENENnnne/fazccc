@@ -1,5 +1,17 @@
 # CHANGELOG — FactionPlugin v4.0.0
 
+## v5.11.0 — Tab-list réseau synchronisé (MySQL / HeroTab)
+
+- **Nouveau** : la faction et le rang de chaque joueur sont écrits dans une table
+  MySQL partagée (`faction_tab_sync`) à chaque connexion, changement de faction ou
+  changement de rang.
+- Lue par le plugin **HeroTab** sur le proxy **Velocity** pour afficher la faction de
+  chacun dans le tab-list du serveur, quel que soit le sous-serveur d'origine.
+
+- Réutilise la section `mysql:` existante du `config.yml` — aucune configuration de plus.
+- Nouveau fichier `FactionTabSync.java`; intégration dans `FactionPlugin` et `FactionTabManager`.
+- Version passée à **5.11.0** (pom.xml, plugin.yml, README, CHANGELOG.
+
 ## v5.10.0 — Sous-chefs (fusion Paper 1.21)
 
 - Ce changement fusionne le rôle **Sous-chef** avec les correctifs de compatibilité
