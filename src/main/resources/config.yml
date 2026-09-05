@@ -11,6 +11,9 @@ faction:
 site-url: "http://localhost:3000"
 
 # Connexion MySQL — DOIT être la MÊME base que celle du site (variables GAME_DB_* dans .env)
+# Sert aussi à alimenter la table faction_tab_sync (faction + rang de chaque
+# joueur), lue par HeroTab (plugin Velocity) pour l'afficher dans le tab-list
+# réseau. Laisse "host" vide pour désactiver /lier ET cette synchronisation.
 mysql:
   host: "127.0.0.1"
   port: 3306

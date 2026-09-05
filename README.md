@@ -6,9 +6,11 @@ FactionPlugin est un plugin tout-en-un qui transforme votre serveur en véritabl
 
 ---
 
-## ✨ Nouveautés de la v5.10.0
+## ✨ Nouveautés de la v5.11.0
 
-- 👥 **Rôle de Sous-chef** : le chef peut promouvoir jusqu'à **2 membres** au rang de sous-chef (`/faction souschef promouvoir <joueur>`) et les rétrograder (`retirer`).
+- 🌐 **Tab-list réseau synchronisé (MySQL / HeroTab)** : la faction et le rang de chaque joueur sont écrits dans une table MySQL partagée (`faction_tab_sync`) afin que le proxy **Velocity** (plugin **HeroTab**) les affiche dans le tab-list de tout le réseau, quel que soit le sous-serveur sur lequel se trouve le joueur.
+- 🔄 **Mise à jour automatique** : la synchronisation se fait à chaque connexion, changement de faction ou changement de rang — aucune configuration supplémentaire au-delà de la section `mysql:` du `config.yml`.
+- 👥 **Rôle de Sous-chef** : le chef peut promouvoir jusqu'à **2 membres** au rang de sous-chef (`/faction souschef promouvoir <joueur>`) et les rétrograder (`retirer`.
 - ⚙️ **Limite modulable** : le chef règle le nombre maximum de sous-chefs autorisés (`/faction souschef limite <0-2>`).
 - 📋 **Liste des sous-chefs** : `/faction souschef liste` affiche les sous-chefs actuels de la faction.
 - 🛠️ **Pouvoirs élargis** : un sous-chef peut inviter, expulser (sauf le chef), gérer les alliances et les guerres, définir les spawns et gérer les claims.
@@ -35,7 +37,7 @@ Et toutes les fonctionnalités des versions précédentes(shop, stats, puissance
 ## 📦 Installation
 
 1. Téléchargez la dernière version depuis la **[page des releases](../../releases/latest)**.
-2. Placez `FactionPlugin-5.10.0.jar` dans le dossier `plugins/` de votre serveur **Paper 1.21**.
+2. Placez `FactionPlugin-5.11.0.jar` dans le dossier `plugins/` de votre serveur **Paper 1.21**.
 3. Redémarrez votre serveur.
 4. Le fichier `config.yml` est généré automatiquement dans `plugins/FactionPlugin/`.
 
@@ -130,12 +132,13 @@ Et toutes les fonctionnalités des versions précédentes(shop, stats, puissance
 mvn clean package
 ```
 
-Le JAR produit se trouve dans `target/FactionPlugin-5.10.0.jar`.
+Le JAR produit se trouve dans `target/FactionPlugin-5.11.0.jar`.
 
 ---
 
 ## 📜 Historique des versions
 
+- **v5.11.0** : **Tab-list réseau synchronisé** — faction et rang écrits dans MySQL (`faction_tab_sync`), lus par HeroTab sur le proxy Velocity pour afficher la faction de chaque joueur sur tout le réseau.
 - **v5.10.0** : Nouveau rôle **Sous-chef** (jusqu'à 2 par faction, pouvoir élargis: invites, kicks, alliances, guerres, spawns, claims); limite modulable par le chef (`/faction souschef limite`); GUI mis à jour; persistance dans `factions.yml`.
 - **v5.9.1** : Mise à jour de compatibilité **Paper 1.21.4**, compilation Java 21, corrections diverses(GUI shop, tri, carte des claims, imports/symboles Bukkit modernes).
 - **v5.5.1** : Purge des effets de potion legacy au démarrage; corrections banque/troc/shop/home.
