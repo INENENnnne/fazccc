@@ -81,6 +81,39 @@ public class FactionManager {
         return true;
     }
 
+    // ─── SOUS-CHEFS ─────────────────────────────────────────────────────────────
+
+    public Faction.SousChefResult addSousChef(String factionName, UUID player) {
+        Faction faction = factions.get(factionName.toLowerCase());
+        if (faction == null) return Faction.SousChefResult.NOT_MEMBER;
+        Faction.SousChefResult result = faction.addSousChef(player);
+        if (result == Faction.SousChefResult.SUCCESS) saveFactions();
+        return result;
+    }
+
+    public Faction.SousChefResult removeSousChef(String factionName, UUID player) {
+        Faction faction = factions.get(factionName.toLowerCase());
+        if (faction == null) return Faction.SousChefResult.NOT_SOUS_CHEF;
+        Faction.SousChefResult result = faction.removeSousChef(player);
+        if (result == Faction.SousChefResult.SUCCESS) saveFactions();
+        return result;
+    }
+
+    public boolean setMaxSousChefs(String factionName, int max) {
+        Faction faction = factions.get(factionName.toLowerCase());
+        if (faction == null) return false;
+        faction.setMaxSousChefs(max);
+        // Si la nouvelle limite est inférieure au nombre de sous-chefs actuels,
+        // on retire les excédentaires (les plus récemment ajoutés en premier n'étant pas trackés,
+        // on retire arbitrairement jusqu'à revenir dans la limite).
+        while (faction.getSousChefCount() > faction.getMaxSousChefs()) {
+            UUID toRemove = faction.getSousChefs().iterator().next();
+            faction.removeSousChef(toRemove);
+        }
+        saveFactions();
+        return true;
+    }
+
     public void addInvite(String factionName, UUID player) {
         Faction faction = factions.get(factionName.toLowerCase());
         if (faction != null) faction.addInvite(player);
@@ -174,10 +207,15 @@ public class FactionManager {
             Faction f = entry.getValue();
             cfg.set(key + ".name", f.getName());
             cfg.set(key + ".chef", f.getChef().toString());
-            cfg.set(key + ".sous-chefs", f.getSousChefs().stream().map(UUID::toString).toList());
             List<String> ms = new ArrayList<>();
             for (UUID u : f.getMembers()) ms.add(u.toString());
             cfg.set(key + ".members", ms);
+
+            // Sous-chefs
+            List<String> scs = new ArrayList<>();
+            for (UUID u : f.getSousChefs()) scs.add(u.toString());
+            cfg.set(key + ".sousChefs", scs);
+            cfg.set(key + ".maxSousChefs", f.getMaxSousChefs());
 
             // Spawn
             if (f.hasSpawn()) {
@@ -222,6 +260,12 @@ public class FactionManager {
                 faction.addMember(u);
                 playerFactionMap.put(u, key);
             }
+            // Sous-chefs
+            if (cfg.contains(path + ".maxSousChefs")) faction.setMaxSousChefs(cfg.getInt(path + ".maxSousChefs"));
+            for (String s : cfg.getStringList(path + ".sousChefs")) {
+                faction.addSousChef(UUID.fromString(s));
+            }
+
             // Spawn
             if (cfg.contains(path + ".spawn")) {
                 try {

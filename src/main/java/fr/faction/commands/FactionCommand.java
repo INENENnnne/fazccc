@@ -162,6 +162,7 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
             case "join"                      -> handleJoin(player, args);
             case "leave"                     -> handleLeave(player);
             case "setchef"                   -> handleSetChef(player, args);
+            case "souschef", "subchief"       -> handleSousChef(player, args);
             case "rename", "renommer"        -> handleRename(player, args);
             case "info"                      -> handleInfo(player, args);
             case "list"                      -> handleList(player);
@@ -211,7 +212,6 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
 
             // ── Spawn de faction v5 ──────────────────────────────────────────
             case "setspawn"                  -> handleSetFactionSpawn(player, args);
-            case "souschef", "sc"            -> handleSousChef(player, args);
             case "spawn"                     -> handleFactionSpawn(player, args);
 
             // ── Homes v5 ─────────────────────────────────────────────────────
@@ -274,7 +274,7 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
         if (args.length < 2) { player.sendMessage(prefix() + ChatColor.RED + "Usage: /faction invite <joueur>"); return; }
         Faction faction = factionManager.getPlayerFaction(player.getUniqueId());
         if (faction == null) { player.sendMessage(prefix() + msg("not-in-faction")); return; }
-        if (!faction.isChef(player.getUniqueId())) { player.sendMessage(prefix() + msg("not-chef")); return; }
+        if (!faction.canManage(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef ou un sous-chef peut inviter des joueurs."); return; }
         Player target = Bukkit.getPlayer(args[1]);
         if (target == null) { player.sendMessage(prefix() + msg("player-not-found")); return; }
         if (target.equals(player)) { player.sendMessage(prefix() + ChatColor.RED + "Tu ne peux pas t'inviter toi-même."); return; }
@@ -369,14 +369,105 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
         notifyMembers(faction, player, ChatColor.GOLD + target.getName() + " est le nouveau chef !", target);
     }
 
+    // ════════════════════════════════════════════════════════════════════════════
+    // SOUS-CHEFS
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * /faction souschef promouvoir <joueur>
+     * /faction souschef retirer <joueur>
+     * /faction souschef liste
+     * /faction souschef limite <0-2>
+     */
+    private void handleSousChef(Player player, String[] args) {
+        Faction faction = factionManager.getPlayerFaction(player.getUniqueId());
+        if (faction == null) { player.sendMessage(prefix() + msg("not-in-faction")); return; }
+
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GOLD + "══ Sous-chefs ══");
+            player.sendMessage(ChatColor.YELLOW + "/faction souschef promouvoir <joueur> " + ChatColor.GRAY + "Nommer un sous-chef (chef uniquement)");
+            player.sendMessage(ChatColor.YELLOW + "/faction souschef retirer <joueur>    " + ChatColor.GRAY + "Retirer un sous-chef (chef uniquement)");
+            player.sendMessage(ChatColor.YELLOW + "/faction souschef liste               " + ChatColor.GRAY + "Voir les sous-chefs");
+            player.sendMessage(ChatColor.YELLOW + "/faction souschef limite <0-2>        " + ChatColor.GRAY + "Régler le nombre max de sous-chefs (chef uniquement, max " + Faction.ABSOLUTE_MAX_SOUS_CHEFS + ")");
+            return;
+        }
+
+        switch (args[1].toLowerCase()) {
+            case "promouvoir", "promote", "add" -> {
+                if (!faction.isChef(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef peut nommer un sous-chef."); return; }
+                if (args.length < 3) { player.sendMessage(prefix() + ChatColor.RED + "Usage: /faction souschef promouvoir <joueur>"); return; }
+                Player target = Bukkit.getPlayer(args[2]);
+                if (target == null) { player.sendMessage(prefix() + msg("player-not-found")); return; }
+                Faction.SousChefResult result = factionManager.addSousChef(faction.getName(), target.getUniqueId());
+                switch (result) {
+                    case SUCCESS -> {
+                        player.sendMessage(prefix() + ChatColor.GREEN + "✔ " + target.getName() + " est désormais sous-chef de la faction.");
+                        target.sendMessage(prefix() + ChatColor.GOLD + "Tu es maintenant sous-chef de la faction " + faction.getName() + " !");
+                        notifyMembers(faction, player, ChatColor.GOLD + target.getName() + " est désormais sous-chef !", target);
+                    }
+                    case NOT_MEMBER        -> player.sendMessage(prefix() + ChatColor.RED + target.getName() + " n'est pas dans ta faction.");
+                    case IS_CHEF           -> player.sendMessage(prefix() + ChatColor.RED + "Le chef ne peut pas être son propre sous-chef.");
+                    case ALREADY_SOUS_CHEF -> player.sendMessage(prefix() + ChatColor.RED + target.getName() + " est déjà sous-chef.");
+                    case LIMIT_REACHED     -> player.sendMessage(prefix() + ChatColor.RED + "Limite de sous-chefs atteinte (" + faction.getMaxSousChefs() + "). Utilise §e/faction souschef limite§c pour l'augmenter (max " + Faction.ABSOLUTE_MAX_SOUS_CHEFS + ").");
+                    default -> {}
+                }
+            }
+            case "retirer", "demote", "remove" -> {
+                if (!faction.isChef(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef peut retirer un sous-chef."); return; }
+                if (args.length < 3) { player.sendMessage(prefix() + ChatColor.RED + "Usage: /faction souschef retirer <joueur>"); return; }
+                @SuppressWarnings("deprecation") OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
+                Faction.SousChefResult result = factionManager.removeSousChef(faction.getName(), target.getUniqueId());
+                String tName = target.getName() != null ? target.getName() : args[2];
+                if (result == Faction.SousChefResult.SUCCESS) {
+                    player.sendMessage(prefix() + ChatColor.YELLOW + tName + " n'est plus sous-chef.");
+                    if (target.isOnline() && target.getPlayer() != null)
+                        target.getPlayer().sendMessage(prefix() + ChatColor.YELLOW + "Tu n'es plus sous-chef de la faction " + faction.getName() + ".");
+                    notifyMembers(faction, player, ChatColor.YELLOW + tName + " n'est plus sous-chef.");
+                } else {
+                    player.sendMessage(prefix() + ChatColor.RED + tName + " n'est pas sous-chef.");
+                }
+            }
+            case "liste", "list" -> {
+                player.sendMessage(ChatColor.GOLD + "══ Sous-chefs de §e" + faction.getName() + ChatColor.GOLD + " ══");
+                player.sendMessage(ChatColor.GRAY + "Limite : §f" + faction.getSousChefCount() + "§7/§f" + faction.getMaxSousChefs()
+                        + ChatColor.GRAY + " (max possible : " + Faction.ABSOLUTE_MAX_SOUS_CHEFS + ")");
+                if (faction.getSousChefs().isEmpty()) {
+                    player.sendMessage(ChatColor.GRAY + "  Aucun sous-chef pour le moment.");
+                } else {
+                    for (UUID uuid : faction.getSousChefs()) {
+                        Player m = Bukkit.getPlayer(uuid);
+                        String status = (m != null && m.isOnline()) ? ChatColor.GREEN + "● " : ChatColor.DARK_GRAY + "○ ";
+                        player.sendMessage("  " + status + ChatColor.WHITE + getPlayerName(uuid));
+                    }
+                }
+            }
+            case "limite", "limit" -> {
+                if (!faction.isChef(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef peut régler la limite de sous-chefs."); return; }
+                if (args.length < 3) { player.sendMessage(prefix() + ChatColor.RED + "Usage: /faction souschef limite <0-" + Faction.ABSOLUTE_MAX_SOUS_CHEFS + ">"); return; }
+                int max;
+                try { max = Integer.parseInt(args[2]); } catch (NumberFormatException e) {
+                    player.sendMessage(prefix() + ChatColor.RED + "Nombre invalide."); return;
+                }
+                if (max < 0 || max > Faction.ABSOLUTE_MAX_SOUS_CHEFS) {
+                    player.sendMessage(prefix() + ChatColor.RED + "La limite doit être comprise entre 0 et " + Faction.ABSOLUTE_MAX_SOUS_CHEFS + ".");
+                    return;
+                }
+                factionManager.setMaxSousChefs(faction.getName(), max);
+                player.sendMessage(prefix() + ChatColor.GREEN + "✔ Limite de sous-chefs réglée à §e" + max + ChatColor.GREEN + ".");
+            }
+            default -> player.sendMessage(prefix() + ChatColor.RED + "Sous-commande inconnue. Utilise /faction souschef pour l'aide.");
+        }
+    }
+
     private void handleKick(Player player, String[] args) {
         if (args.length < 2) { player.sendMessage(prefix() + ChatColor.RED + "Usage: /faction kick <joueur>"); return; }
         Faction faction = factionManager.getPlayerFaction(player.getUniqueId());
         if (faction == null) { player.sendMessage(prefix() + msg("not-in-faction")); return; }
-        if (!faction.isChef(player.getUniqueId())) { player.sendMessage(prefix() + msg("not-chef")); return; }
+        if (!faction.canManage(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef ou un sous-chef peut expulser un membre."); return; }
         @SuppressWarnings("deprecation") OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
         if (!faction.isMember(target.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + args[1] + " n'est pas dans ta faction."); return; }
         if (target.getUniqueId().equals(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Tu ne peux pas te kick toi-même."); return; }
+        if (faction.isChef(target.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Tu ne peux pas expulser le chef de la faction."); return; }
         String tName = target.getName() != null ? target.getName() : args[1];
         factionManager.removeMember(faction.getName(), target.getUniqueId());
         player.sendMessage(prefix() + ChatColor.YELLOW + tName + " expulsé de la faction.");
@@ -403,7 +494,9 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
         for (UUID uuid : faction.getMembers()) {
             Player m = Bukkit.getPlayer(uuid);
             String status = (m != null && m.isOnline()) ? ChatColor.GREEN + "● " : ChatColor.DARK_GRAY + "○ ";
-            player.sendMessage("  " + status + ChatColor.WHITE + getPlayerName(uuid) + (uuid.equals(faction.getChef()) ? ChatColor.GOLD + " [Chef]" : ""));
+            String tag = uuid.equals(faction.getChef()) ? ChatColor.GOLD + " [Chef]"
+                    : faction.isSousChef(uuid) ? ChatColor.AQUA + " [Sous-chef]" : "";
+            player.sendMessage("  " + status + ChatColor.WHITE + getPlayerName(uuid) + tag);
         }
     }
 
@@ -725,7 +818,7 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
     private void handleClaim(Player player) {
         Faction faction = factionManager.getPlayerFaction(player.getUniqueId());
         if (faction == null) { player.sendMessage(prefix() + ChatColor.RED + "Tu dois être dans une faction pour claimer."); return; }
-        if (!faction.isChef(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef peut claimer un chunk."); return; }
+        if (!faction.canManage(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef ou un sous-chef peut claimer un chunk."); return; }
 
         Chunk chunk = player.getLocation().getChunk();
         if (claimManager.isClaimed(chunk)) {
@@ -990,7 +1083,7 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
     private void handleUnclaim(Player player) {
         Faction faction = factionManager.getPlayerFaction(player.getUniqueId());
         if (faction == null) { player.sendMessage(prefix() + ChatColor.RED + "Tu n'es pas dans une faction."); return; }
-        if (!faction.isChef(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef peut retirer un claim."); return; }
+        if (!faction.canManage(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef ou un sous-chef peut retirer un claim."); return; }
 
         Chunk chunk = player.getLocation().getChunk();
         if (!claimManager.isClaimed(chunk)) { player.sendMessage(prefix() + ChatColor.RED + "Ce chunk n'est pas claimé."); return; }
@@ -1283,7 +1376,7 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
     private void handleSetFactionSpawn(Player player, String[] args) {
         Faction faction = factionManager.getPlayerFaction(player.getUniqueId());
         if (faction == null) { player.sendMessage(prefix() + msg("not-in-faction")); return; }
-        if (!faction.isChefOrSousChef(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le §eChef §cou un §eSous-Chef §cpeut définir un spawn."); return; }
+        if (!faction.canManage(player.getUniqueId())) { player.sendMessage(prefix() + ChatColor.RED + "Seul le chef ou un sous-chef peut définir le spawn de la faction."); return; }
 
         fr.faction.ranking.FactionRank rank = powerManager.getFactionRank(faction.getName());
         int maxSpawns = rank.getMaxSpawns();
@@ -1578,6 +1671,7 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.YELLOW + "/faction leave               " + ChatColor.GRAY + "Quitter sa faction");
         player.sendMessage(ChatColor.YELLOW + "/faction kick <joueur>       " + ChatColor.GRAY + "Expulser un membre");
         player.sendMessage(ChatColor.YELLOW + "/faction setchef <joueur>    " + ChatColor.GRAY + "Transférer le chef");
+        player.sendMessage(ChatColor.YELLOW + "/faction souschef            " + ChatColor.GRAY + "Gérer les sous-chefs (promouvoir/retirer/liste/limite)");
         player.sendMessage(ChatColor.YELLOW + "/faction rename <nouveau_nom>" + ChatColor.GRAY + "Renommer la faction (chef uniquement)");
         player.sendMessage(ChatColor.YELLOW + "/faction info [nom]          " + ChatColor.GRAY + "Info faction");
         player.sendMessage(ChatColor.YELLOW + "/faction list                " + ChatColor.GRAY + "Liste des factions");
@@ -1621,8 +1715,6 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.LIGHT_PURPLE + "/faction alliance            " + ChatColor.GRAY + "Gérer les alliances (sous-commandes + GUI)");
         player.sendMessage(ChatColor.GRAY + "— Spawn de faction —");
         player.sendMessage(ChatColor.AQUA + "/faction setspawn [1|2]      " + ChatColor.GRAY + "Définir un spawn (chef) — §b2 spawns dès le rang ◆ Diamant");
-        player.sendMessage(ChatColor.GOLD  + "/faction souschef nommer <joueur> " + ChatColor.GRAY + "Nommer un sous-chef (chef, max 2)");
-        player.sendMessage(ChatColor.GOLD  + "/faction souschef retirer <joueur> " + ChatColor.GRAY + "Retirer un sous-chef (chef uniquement)");
         player.sendMessage(ChatColor.AQUA + "/faction spawn [1|2]         " + ChatColor.GRAY + "Se téléporter à un spawn de faction");
         player.sendMessage(ChatColor.GRAY + "— Homes perso —");
         player.sendMessage(ChatColor.GREEN + "/faction sethome [nom]       " + ChatColor.GRAY + "Définir un home (1 sans faction, 2 avec, 3 si allié)");
@@ -1686,13 +1778,13 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1) {
             List<String> subs = Arrays.asList(
-                    "create","disband","invite","join","leave","kick","setchef","rename",
+                    "create","disband","invite","join","leave","kick","setchef","souschef","rename",
                     "info","list","tp","coffre","menu","gui",
                     "top","topbanque","classement","rangs","power","stats","classementjoueurs",
-                    "claim","unclaim","claims","claimmap","claimshow","map","souschef","sc","claimallow","claimdeny","claimallies","perms",
+                    "claim","unclaim","claims","claimmap","claimshow","map","claimallow","claimdeny","claimallies","perms",
                     "banque","troc","accepter",
                     "shop","vendre","acheter","recuperer","mesannonces",
-                    "invsee","alliance","setspawn","spawn","souschef","sc",
+                    "invsee","alliance","setspawn","spawn",
                     "sethome","home","delhome","homes",
                     "tpa","tpaccept","tpdeny",
                     "guerre","ranger","trier","organiser"
@@ -1713,26 +1805,15 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
                                 .map(Player::getName)
                                 .filter(n -> n.toLowerCase().startsWith(args[1].toLowerCase()))
                                 .collect(Collectors.toList());
+                case "souschef", "subchief" -> Arrays.asList("promouvoir","retirer","liste","limite").stream()
+                        .filter(s -> s.startsWith(args[1].toLowerCase()))
+                        .collect(Collectors.toList());
                 case "classementjoueurs", "cj" -> STATS_CATEGORIES.stream()
                         .filter(c -> c.startsWith(args[1].toLowerCase()))
                         .collect(Collectors.toList());
                 case "home", "delhome" -> homeManager.getHomeNames(player.getUniqueId()).stream()
                         .filter(n -> n.toLowerCase().startsWith(args[1].toLowerCase()))
                         .collect(Collectors.toList());
-                case "souschef", "sc" -> {
-                    if(args.length==1) yield Arrays.asList("nommer","retirer").stream()
-                        .filter(s->s.startsWith(args[0].toLowerCase())).collect(Collectors.toList());
-                    if(args.length==2) {
-                        Faction scFac = factionManager.getPlayerFaction(player.getUniqueId());
-                        if(scFac==null) yield Collections.emptyList();
-                        yield scFac.getMembers().stream()
-                            .filter(u->!u.equals(scFac.getChef()))
-                            .map(u->{Player p=Bukkit.getPlayer(u);return p!=null?p.getName():null;})
-                            .filter(n->n!=null && n.toLowerCase().startsWith(args[1].toLowerCase()))
-                            .collect(Collectors.toList());
-                    }
-                    yield Collections.emptyList();
-                }
                 case "setspawn", "spawn" -> {
                     // Proposer "1" toujours, "2" seulement si rang Diamant+
                     Faction spFac = factionManager.getPlayerFaction(player.getUniqueId());
@@ -1793,6 +1874,24 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
                             .collect(Collectors.toList());
                     default -> Collections.emptyList();
                 };
+                case "souschef", "subchief" -> switch (args[1].toLowerCase()) {
+                    case "promouvoir","promote","add" -> Bukkit.getOnlinePlayers().stream()
+                            .map(Player::getName)
+                            .filter(n -> n.toLowerCase().startsWith(args[2].toLowerCase()))
+                            .collect(Collectors.toList());
+                    case "retirer","demote","remove" -> {
+                        Faction scFac = factionManager.getPlayerFaction(player.getUniqueId());
+                        if (scFac == null) yield Collections.emptyList();
+                        yield scFac.getSousChefs().stream()
+                                .map(this::getPlayerName)
+                                .filter(n -> n.toLowerCase().startsWith(args[2].toLowerCase()))
+                                .collect(Collectors.toList());
+                    }
+                    case "limite","limit" -> Arrays.asList("0","1","2").stream()
+                            .filter(s -> s.startsWith(args[2]))
+                            .collect(Collectors.toList());
+                    default -> Collections.emptyList();
+                };
                 default -> Collections.emptyList();
             };
         }
@@ -1806,78 +1905,4 @@ public class FactionCommand implements CommandExecutor, TabCompleter {
 
         return Collections.emptyList();
     }
-
-    // ════════════════════════════════════════════════════════════════════════════
-    // SOUS-CHEF
-    // ════════════════════════════════════════════════════════════════════════════
-
-    private void handleSousChef(Player player, String[] args) {
-        Faction faction = factionManager.getPlayerFaction(player.getUniqueId());
-        if (faction == null) { player.sendMessage(prefix() + msg("not-in-faction")); return; }
-        if (!faction.isChef(player.getUniqueId())) {
-            player.sendMessage(prefix() + ChatColor.RED + "Seul le §eChef §cpeut gérer les sous-chefs.");
-            return;
-        }
-        if (args.length < 3) {
-            player.sendMessage(prefix() + ChatColor.GRAY + "Usage : §e/fac souschef <nommer|retirer> <joueur>");
-            player.sendMessage(ChatColor.GRAY + "  Sous-chefs actuels : §f"
-                    + faction.getSousChefs().stream()
-                        .map(u -> { Player p = Bukkit.getPlayer(u); return p != null ? p.getName() : u.toString().substring(0,8); })
-                        .collect(java.util.stream.Collectors.joining(", ")));
-            player.sendMessage(ChatColor.GRAY + "  Slots : §f" + faction.getSousChefs().size() + "§7/§f" + fr.faction.models.Faction.MAX_SOUS_CHEFS);
-            return;
-        }
-        String action = args[1].toLowerCase();
-        String targetName = args[2];
-        Player target = Bukkit.getPlayerExact(targetName);
-
-        if ("nommer".equals(action)) {
-            if (target == null || !faction.isMember(target.getUniqueId())) {
-                player.sendMessage(prefix() + ChatColor.RED + "§e" + targetName + " §cn'est pas dans ta faction ou est hors ligne.");
-                return;
-            }
-            if (faction.isChef(target.getUniqueId())) {
-                player.sendMessage(prefix() + ChatColor.RED + "Tu es déjà le chef.");
-                return;
-            }
-            if (faction.isSousChef(target.getUniqueId())) {
-                player.sendMessage(prefix() + ChatColor.RED + "§e" + targetName + " §cest déjà sous-chef.");
-                return;
-            }
-            if (faction.getSousChefs().size() >= fr.faction.models.Faction.MAX_SOUS_CHEFS) {
-                player.sendMessage(prefix() + ChatColor.RED + "Limite de §e" + fr.faction.models.Faction.MAX_SOUS_CHEFS
-                        + " §csous-chef(s) atteinte. Retire un sous-chef d'abord.");
-                return;
-            }
-            faction.addSousChef(target.getUniqueId());
-            factionManager.saveFactions();
-            player.sendMessage(prefix() + ChatColor.GREEN + "§e" + target.getName()
-                    + " §aest maintenant §6Sous-Chef §ade §e" + faction.getName() + "§a !");
-            target.sendMessage(prefix() + ChatColor.GOLD + "Tu es maintenant §6Sous-Chef §ede la faction §e"
-                    + faction.getName() + ChatColor.GOLD + " !");
-            target.playSound(target.getLocation(), org.bukkit.Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.7f, 1.2f);
-
-        } else if ("retirer".equals(action)) {
-            // Chercher par nom même hors ligne
-            java.util.UUID targetUUID = null;
-            for (java.util.UUID sc : faction.getSousChefs()) {
-                Player sp = Bukkit.getPlayer(sc);
-                if (sp != null && sp.getName().equalsIgnoreCase(targetName)) { targetUUID = sc; break; }
-                org.bukkit.OfflinePlayer op = Bukkit.getOfflinePlayer(sc);
-                if (op.getName() != null && op.getName().equalsIgnoreCase(targetName)) { targetUUID = sc; break; }
-            }
-            if (targetUUID == null) {
-                player.sendMessage(prefix() + ChatColor.RED + "§e" + targetName + " §cn'est pas sous-chef de ta faction.");
-                return;
-            }
-            faction.removeSousChef(targetUUID);
-            factionManager.saveFactions();
-            player.sendMessage(prefix() + ChatColor.YELLOW + "§e" + targetName + " §nn'est plus§r§e sous-chef.");
-            Player sc = Bukkit.getPlayer(targetUUID);
-            if (sc != null) sc.sendMessage(prefix() + ChatColor.YELLOW + "Tu n'es plus sous-chef de §e" + faction.getName() + "§e.");
-        } else {
-            player.sendMessage(prefix() + ChatColor.GRAY + "Usage : §e/fac souschef <nommer|retirer> <joueur>");
-        }
-    }
-
 }

@@ -15,8 +15,14 @@ public class Faction {
     private UUID chef;
     private List<UUID> members;
     private List<UUID> pendingInvites;
-    /** Sous-chefs (max 2) — nommés par le chef */
-    private List<UUID> sousChefs = new ArrayList<>();
+
+    // ── Sous-chefs ─────────────────────────────────────────────────────────────
+    /** Plafond absolu de sous-chefs, non modifiable même par le chef. */
+    public static final int ABSOLUTE_MAX_SOUS_CHEFS = 2;
+    /** Sous-chefs actuels de la faction. */
+    private Set<UUID> sousChefs = new HashSet<>();
+    /** Nombre max de sous-chefs autorisés, réglable par le chef (0 à ABSOLUTE_MAX_SOUS_CHEFS). */
+    private int maxSousChefs = ABSOLUTE_MAX_SOUS_CHEFS;
 
     // ── Spawns de faction ───────────────────────────────────────────────────────
     /** Spawn principal (tous rangs) */
@@ -42,31 +48,44 @@ public class Faction {
     public String getName()                   { return name; }
     public void setName(String name)          { this.name = name; }
     public UUID getChef()                     { return chef; }
-    public void setChef(UUID chef)            { this.chef = chef; }
+    public void setChef(UUID chef)            { this.chef = chef; sousChefs.remove(chef); }
     public List<UUID> getMembers()            { return members; }
     public boolean isMember(UUID uuid)        { return members.contains(uuid); }
     public boolean isChef(UUID uuid)          { return chef.equals(uuid); }
     public void addMember(UUID uuid)          { if (!members.contains(uuid)) members.add(uuid); }
     public void removeMember(UUID uuid)       { members.remove(uuid); sousChefs.remove(uuid); }
-
-    // ── Sous-chefs ─────────────────────────────────────────────────────────────
-    public static final int MAX_SOUS_CHEFS = 2;
-    public List<UUID> getSousChefs()              { return sousChefs; }
-    public boolean isSousChef(UUID uuid)          { return sousChefs.contains(uuid); }
-    public boolean isChefOrSousChef(UUID uuid)    { return isChef(uuid) || isSousChef(uuid); }
-    public boolean addSousChef(UUID uuid) {
-        if (isChef(uuid) || sousChefs.contains(uuid)) return false;
-        if (sousChefs.size() >= MAX_SOUS_CHEFS) return false;
-        if (!members.contains(uuid)) return false;
-        sousChefs.add(uuid);
-        return true;
-    }
-    public boolean removeSousChef(UUID uuid)      { return sousChefs.remove(uuid); }
     public List<UUID> getPendingInvites()     { return pendingInvites; }
     public void addInvite(UUID uuid)          { if (!pendingInvites.contains(uuid)) pendingInvites.add(uuid); }
     public void removeInvite(UUID uuid)       { pendingInvites.remove(uuid); }
     public boolean hasInvite(UUID uuid)       { return pendingInvites.contains(uuid); }
     public int getMemberCount()               { return members.size(); }
+
+    // ── Sous-chefs ─────────────────────────────────────────────────────────────
+    public Set<UUID> getSousChefs()            { return sousChefs; }
+    public boolean isSousChef(UUID uuid)       { return sousChefs.contains(uuid); }
+    /** Chef OU sous-chef : autorisé à gérer invites/kicks/alliances/guerres/spawns/claims. */
+    public boolean canManage(UUID uuid)        { return isChef(uuid) || isSousChef(uuid); }
+    public int getMaxSousChefs()               { return maxSousChefs; }
+    /** Le chef peut régler la limite entre 0 et ABSOLUTE_MAX_SOUS_CHEFS (2). */
+    public void setMaxSousChefs(int max)       { this.maxSousChefs = Math.max(0, Math.min(ABSOLUTE_MAX_SOUS_CHEFS, max)); }
+    public int getSousChefCount()              { return sousChefs.size(); }
+
+    public enum SousChefResult { SUCCESS, NOT_MEMBER, ALREADY_SOUS_CHEF, IS_CHEF, LIMIT_REACHED, NOT_SOUS_CHEF }
+
+    public SousChefResult addSousChef(UUID uuid) {
+        if (!members.contains(uuid))     return SousChefResult.NOT_MEMBER;
+        if (isChef(uuid))                return SousChefResult.IS_CHEF;
+        if (sousChefs.contains(uuid))    return SousChefResult.ALREADY_SOUS_CHEF;
+        if (sousChefs.size() >= maxSousChefs) return SousChefResult.LIMIT_REACHED;
+        sousChefs.add(uuid);
+        return SousChefResult.SUCCESS;
+    }
+
+    public SousChefResult removeSousChef(UUID uuid) {
+        if (!sousChefs.contains(uuid))   return SousChefResult.NOT_SOUS_CHEF;
+        sousChefs.remove(uuid);
+        return SousChefResult.SUCCESS;
+    }
 
     // ── Spawn ───────────────────────────────────────────────────────────────────
     // Spawn 1
