@@ -1,5 +1,28 @@
 # CHANGELOG — FactionPlugin v4.0.0
 
+## v5.10.0 — Sous-chefs (fusion Paper 1.21)
+
+- Ce changement fusionne le rôle **Sous-chef** avec les correctifs de compatibilité
+  **Paper 1.21.x** (API Bukkit modernes, Java 21) de la v5.9.1.
+- Le numéro de version est passé à **5.10.0**.
+
+### Sous-chefs
+- Nouveau rôle **Sous-chef** : le chef peut promouvoir jusqu'à **2** membres au rang de sous-chef
+  via `/faction souschef promouvoir <joueur>` (et les rétrograder avec `retirer`).
+- Le chef peut régler la limite de sous-chefs autorisés (`/faction souschef limite <0-2>`, plafond absolu = 2).
+- `/faction souschef liste` — voir les sous-chefs actuels.
+- Un sous-chef peut désormais :
+  - Inviter des joueurs (`/faction invite`)
+  - Expulser des membres, **sauf le chef** (`/faction kick`)
+  - Proposer, accepter, refuser et rompre des alliances (`/faction alliance ...`)
+  - Déclarer, accepter et refuser des guerres (`/faction guerre declarer/accepter/refuser`)
+  - Définir les spawns de faction (`/faction setspawn`)
+  - Claimer / retirer des claims (`/faction claim`, `/faction unclaim`)
+- Restent réservés au **chef uniquement** : `setchef`, `rename`, `disband`, `claimallow`/`claimdeny`,
+  `perms`, et la capitulation en guerre (`/faction guerre capituler`).
+- GUI (`MainMenuGUI` et `FactionGUI`) mis à jour pour refléter ces nouvelles permissions.
+- Persistance des sous-chefs et de la limite dans `factions.yml`.
+
 ## Nouveautés v4.0.0
 
 ### 🛒 Shop Global (`/faction shop`)
